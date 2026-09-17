@@ -7,10 +7,16 @@ export function hashVerificationValue(value: string): string {
 }
 
 export function verifyVerificationValue(candidate: string, storedHash: string): boolean {
+  if (typeof storedHash !== 'string' || storedHash.length === 0) return false;
+  let b: Buffer;
+  try {
+    b = Buffer.from(storedHash, 'hex');
+  } catch {
+    return false;
+  }
   const candidateHash = hashVerificationValue(candidate);
   const a = Buffer.from(candidateHash, 'hex');
-  const b = Buffer.from(storedHash, 'hex');
-  return a.length === b.length && timingSafeEqual(a, b);
+  return a.length === b.length && a.length > 0 && timingSafeEqual(a, b);
 }
 
 export function newDocumentId(): string {

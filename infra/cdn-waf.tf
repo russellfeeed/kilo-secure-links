@@ -28,6 +28,20 @@ resource "aws_cloudfront_distribution" "web" {
     }
   }
 
+  ordered_cache_behavior {
+    path_pattern           = "/d/*"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "documents"
+    viewer_protocol_policy = "redirect-to-https"
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+  }
+
   restrictions {
     geo_restriction {
       restriction_type = "none"

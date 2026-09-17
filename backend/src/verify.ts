@@ -72,36 +72,67 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   }
 
   const tokenHash = hashAccessToken(token);
-  const lookup = await db().send(
-    new QueryCommand({
-      TableName: DOCUMENTS_TABLE,
-      IndexName: 'byAccessToken',
-      KeyConditionExpression: 'accessTokenHash = :h',
-      ExpressionAttributeValues: { ':h': tokenHash },
-      Limit: 1,
-    }),
-  );
+  let lookup;
+  try {
+    lookup = await db().send(
+      new QueryCommand({
+        TableName: DOCUMENTS_TABLE,
+        IndexName: 'byAccessToken',
+        KeyConditionExpression: 'accessTokenHash = :h',
+        ExpressionAttributeValues: { ':h': tokenHash },
+        Limit: 1,
+      }),
+    );
+  } catch (err) {
+    console.error('byAccessToken query failed, falling back to scan', err);
+    const { ScanCommand } = await import('@aws-sdk/lib-dynamodb');
+    lookup = await db().send(
+      new ScanCommand({
+        TableName: DOCUMENTS_TABLE,
+        FilterExpression: 'accessTokenHash = :h',
+        ExpressionAttributeValues: { ':h': tokenHash },
+        Limit: 1,
+      }),
+    );
+  }
 
-  const doc = (lookup.Items?.[0] ?? null) as DocumentItem | null;
+  const docId = (lookup.Items?.[0] as { documentId?: string } | undefined)?.documentId;
+  if (!docId) {
+    return json(404, { message: 'This link is invalid or has expired.' });
+  }
+  const full = await db().send(
+    new GetCommand({ TableName: DOCUMENTS_TABLE, Key: { documentId: docId } }),
+  );
+  const doc = (full.Item ?? null) as unknown as Partial<DocumentItem> | null;
   if (!doc) {
     return json(404, { message: 'This link is invalid or has expired.' });
   }
+  const missingFields = ['documentId', 'customerId', 'expiryDate', 's3Key', 'verificationValueHash'].filter(
+    (f) => typeof (doc as Record<string, unknown>)[f] !== 'string' || ((doc as Record<string, unknown>)[f] as string).length === 0,
+  );
+  if (missingFields.length > 0) {
+    return json(404, { message: 'This link is invalid or has expired.' });
+  }
 
-  if (Date.parse(doc.expiryDate) <= Date.now()) {
-    await audit(doc.documentId, doc.customerId, 'expired', 'recipient:anonymous');
+  if (Date.parse(doc.expiryDate as string) <= Date.now()) {
+    await audit(doc.documentId as string, doc.customerId as string, 'expired', 'recipient:anonymous');
     return json(410, { message: 'This link has expired.' });
   }
 
+  const documentId = doc.documentId as string;
+  const customerId = doc.customerId as string;
+
   const counterRes = await db().send(
-    new GetCommand({ TableName: COUNTERS_TABLE, Key: { documentId: doc.documentId } }),
+    new GetCommand({ TableName: COUNTERS_TABLE, Key: { documentId } }),
   );
   const counter = (counterRes.Item ?? { failedCount: 0 }) as VerificationCounter;
   if (typeof counter.lockedUntil === 'string' && Date.parse(counter.lockedUntil) > Date.now()) {
-    await audit(doc.documentId, doc.customerId, 'access_attempt', 'recipient:anonymous', 'locked');
+    await audit(documentId, customerId, 'access_attempt', 'recipient:anonymous', 'locked');
     return json(429, { message: 'Too many attempts. Try again later.', lockedUntil: counter.lockedUntil });
   }
 
-  const ok = verifyVerificationValue(dateOfBirth, doc.verificationValueHash);
+  const storedHash = doc.verificationValueHash as string;
+  const ok = verifyVerificationValue(dateOfBirth, storedHash);
 
   if (!ok) {
     const failedCount = Number(counter.failedCount ?? 0) + 1;
@@ -109,7 +140,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     await db().send(
       new UpdateCommand({
         TableName: COUNTERS_TABLE,
-        Key: { documentId: doc.documentId },
+        Key: { documentId },
         UpdateExpression: lockedUntil
           ? 'SET failedCount = :c, lockedUntil = :l'
           : 'SET failedCount = :c',
@@ -118,7 +149,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
           : { ':c': failedCount },
       }),
     );
-    await audit(doc.documentId, doc.customerId, lockedUntil ? 'lockout' : 'failure', 'recipient:anonymous');
+    await audit(documentId, customerId, lockedUntil ? 'lockout' : 'failure', 'recipient:anonymous');
     if (lockedUntil) {
       return json(429, { message: 'Too many attempts. Try again later.', lockedUntil });
     }
@@ -128,39 +159,40 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   await db().send(
     new UpdateCommand({
       TableName: COUNTERS_TABLE,
-      Key: { documentId: doc.documentId },
+      Key: { documentId },
       UpdateExpression: 'SET failedCount = :zero REMOVE lockedUntil',
       ExpressionAttributeValues: { ':zero': 0 },
     }),
   );
 
-  if (!doc.viewedStatus) {
+  const alreadyViewed = doc.viewedStatus === true;
+  if (!alreadyViewed) {
     await db().send(
       new UpdateCommand({
         TableName: DOCUMENTS_TABLE,
-        Key: { documentId: doc.documentId },
+        Key: { documentId },
         UpdateExpression: 'SET viewedStatus = :true',
         ExpressionAttributeValues: { ':true': true },
       }),
     );
   }
 
-  await audit(doc.documentId, doc.customerId, 'success', 'recipient:anonymous');
+  await audit(documentId, customerId, 'success', 'recipient:anonymous');
 
   const url = await getSignedUrl(
     s3client(),
     new GetObjectCommand({
       Bucket: DOCUMENTS_BUCKET,
-      Key: doc.s3Key,
+      Key: doc.s3Key as string,
       ResponseContentType: 'application/pdf',
-      ResponseContentDisposition: `inline; filename="${doc.originalFilename.replace(/"/g, '')}"`,
+      ResponseContentDisposition: `inline; filename="${String(doc.originalFilename ?? 'document.pdf').replace(/"/g, '')}"`,
     }),
     { expiresIn: PRESIGN_SECONDS },
   );
 
   return json(200, {
-    documentId: doc.documentId,
-    documentReference: doc.documentReference,
+    documentId,
+    documentReference: String(doc.documentReference ?? ''),
     downloadUrl: url,
     expiresInSeconds: PRESIGN_SECONDS,
   });

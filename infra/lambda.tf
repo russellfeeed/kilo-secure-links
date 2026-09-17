@@ -157,3 +157,20 @@ resource "aws_lambda_function" "upload" {
     }
   }
 }
+
+resource "aws_lambda_function" "verify" {
+  function_name = "${var.project}-${var.environment}-verify"
+  role          = aws_iam_role.lambda_exec.arn
+  runtime       = "nodejs20.x"
+  handler       = "verify.handler"
+  filename      = data.archive_file.backend.output_path
+  timeout       = 10
+  environment {
+    variables = {
+      DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
+      AUDIT_TABLE     = aws_dynamodb_table.audit_events.name
+      COUNTERS_TABLE  = aws_dynamodb_table.verification_counters.name
+      DOCUMENTS_BUCKET = aws_s3_bucket.documents.id
+    }
+  }
+}
