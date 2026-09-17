@@ -1,0 +1,19 @@
+{
+  "name": "securelinks",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SecureLinks Phase 1 pilot foundation",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm --workspace frontend start",
+    "build:frontend": "npm --workspace frontend run build",
+    "build:backend": "npm --workspace backend run build",
+    "lint:frontend": "npm --workspace frontend run lint"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

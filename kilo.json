@@ -1,0 +1,19 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "mcp": {
+    "req-chat-capture": {
+      "type": "remote",
+      "url": "https://zgcnlkxfzvyibvmkoeoe.supabase.co/functions/v1/mcp",
+      "enabled": true
+    },
+    "aws": {
+      "type": "local",
+      "command": ["C:\\Users\\russe\\.local\\bin\\uvx.exe", "--from", "mcp-proxy-for-aws-cli@latest", "python", "C:\\Users\\russe\\OneDrive\\Documents\\dev\\kilo-secure-links\\.kilo\\mcp\\aws-ipv4-launcher.py", "https://aws-mcp.us-east-1.api.aws/mcp", "--region", "us-east-1", "--metadata", "AWS_REGION=eu-west-2", "--retries", "3"],
+      "environment": {
+        "AWS_MCP_PROXY_PROFILES": "securelinks-pilot"
+      },
+      "enabled": true,
+      "timeout": 60000
+    }
+  }
+}
