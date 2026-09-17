@@ -60,7 +60,8 @@ resource "aws_iam_policy" "lambda_data" {
       {
         Effect = "Allow"
         Action = [
-          "s3:GetObject"
+          "s3:GetObject",
+          "s3:PutObject"
         ]
         Resource = ["${aws_s3_bucket.documents.arn}/*"]
       },
@@ -68,7 +69,9 @@ resource "aws_iam_policy" "lambda_data" {
         Effect = "Allow"
         Action = [
           "kms:Decrypt",
-          "kms:DescribeKey"
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:GenerateDataKey"
         ]
         Resource = [aws_kms_key.documents.arn]
       },
@@ -133,6 +136,24 @@ resource "aws_lambda_function" "support_reset" {
     variables = {
       AUDIT_TABLE    = aws_dynamodb_table.audit_events.name
       COUNTERS_TABLE = aws_dynamodb_table.verification_counters.name
+    }
+  }
+}
+
+resource "aws_lambda_function" "upload" {
+  function_name = "${var.project}-${var.environment}-upload"
+  role          = aws_iam_role.lambda_exec.arn
+  runtime       = "nodejs20.x"
+  handler       = "upload.handler"
+  filename      = data.archive_file.backend.output_path
+  timeout       = 30
+  memory_size   = 256
+  environment {
+    variables = {
+      DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
+      AUDIT_TABLE     = aws_dynamodb_table.audit_events.name
+      DOCUMENTS_BUCKET = aws_s3_bucket.documents.id
+      ACCESS_URL_BASE  = "https://${aws_cloudfront_distribution.web.domain_name}"
     }
   }
 }

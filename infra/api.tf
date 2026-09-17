@@ -30,6 +30,13 @@ resource "aws_lambda_permission" "api_support_reset" {
   source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
 }
 
+resource "aws_lambda_permission" "api_upload" {
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.upload.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
 resource "aws_apigatewayv2_integration" "health" {
   api_id                 = aws_apigatewayv2_api.main.id
   integration_type       = "AWS_PROXY"
@@ -51,6 +58,13 @@ resource "aws_apigatewayv2_integration" "support_reset" {
   payload_format_version = "2.0"
 }
 
+resource "aws_apigatewayv2_integration" "upload" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.upload.invoke_arn
+  payload_format_version = "2.0"
+}
+
 resource "aws_apigatewayv2_route" "health" {
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "GET /health"
@@ -68,5 +82,12 @@ resource "aws_apigatewayv2_route" "support_reset" {
   api_id             = aws_apigatewayv2_api.main.id
   route_key          = "POST /support/reset-lockout"
   target             = "integrations/${aws_apigatewayv2_integration.support_reset.id}"
+  authorization_type = "AWS_IAM"
+}
+
+resource "aws_apigatewayv2_route" "upload" {
+  api_id             = aws_apigatewayv2_api.main.id
+  route_key          = "POST /documents"
+  target             = "integrations/${aws_apigatewayv2_integration.upload.id}"
   authorization_type = "AWS_IAM"
 }
