@@ -17,7 +17,8 @@ const SMS_TEMPLATE = (link: string): string =>
   template: `
     <h1>Upload test harness (local only)</h1>
     <p class="intro">
-      Uploads a PDF to <code>POST /documents</code> and previews how the returned link
+      Uploads a PDF to <code>POST /dev/upload</code> (dev-only unsigned alias of
+      <code>POST /documents</code>) and previews how the returned link
       would appear inside an externally composed SMS. Display-only: nothing is sent.
     </p>
 
@@ -131,7 +132,7 @@ export class UploadHarnessComponent {
     this.error = '';
     this.missing = [];
     try {
-      const res = await fetch('/documents', {
+      const res = await fetch('/dev/upload', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

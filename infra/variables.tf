@@ -31,3 +31,9 @@ variable "api_prism_key_value" {
   description = "Prism API key value (sensitive, never commit)"
   sensitive   = true
 }
+
+variable "enable_dev_routes" {
+  type        = bool
+  description = "Enable unsigned local-harness routes (dev only, REQ-021). Must be false in test/prod."
+  default     = false
+}

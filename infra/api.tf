@@ -111,3 +111,14 @@ resource "aws_apigatewayv2_route" "verify" {
   route_key = "POST /verify"
   target    = "integrations/${aws_apigatewayv2_integration.verify.id}"
 }
+
+# Dev-only unsigned alias of POST /documents for the REQ-021 local harness.
+# Gated by var.enable_dev_routes (dev only). The harness posts here so the
+# browser never needs AWS credentials; the Lambda still runs with the full
+# exec-role policy, so abuse is limited to creating dev documents.
+resource "aws_apigatewayv2_route" "dev_upload" {
+  count     = var.enable_dev_routes ? 1 : 0
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "POST /dev/upload"
+  target    = "integrations/${aws_apigatewayv2_integration.upload.id}"
+}

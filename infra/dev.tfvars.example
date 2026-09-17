@@ -1,2 +1,5 @@
 environment = "dev"
 aws_region   = "eu-west-2"
+
+# Local harness unsigned upload route (REQ-021). Dev only — keep false/missing elsewhere.
+enable_dev_routes = true
