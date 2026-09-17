@@ -39,6 +39,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "documents" {
   rule {
     id     = "rolling-90-day-purge"
     status = "Enabled"
+    filter {}
     expiration {
       days = var.retention_days
     }
