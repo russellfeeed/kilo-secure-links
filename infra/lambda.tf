@@ -174,3 +174,18 @@ resource "aws_lambda_function" "verify" {
     }
   }
 }
+
+resource "aws_lambda_function" "report" {
+  function_name = "${var.project}-${var.environment}-report"
+  role          = aws_iam_role.lambda_exec.arn
+  runtime       = "nodejs20.x"
+  handler       = "report.handler"
+  filename      = data.archive_file.backend.output_path
+  timeout       = 15
+  environment {
+    variables = {
+      DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
+      AUDIT_TABLE     = aws_dynamodb_table.audit_events.name
+    }
+  }
+}
