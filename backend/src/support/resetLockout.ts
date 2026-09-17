@@ -1,9 +1,10 @@
-import { PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { randomUUID } from 'node:crypto';
 import { db, table } from '../db.js';
 import { json, nowIso, supportActor } from '../http.js';
 
+const DOCUMENTS_TABLE = table(process.env.DOCUMENTS_TABLE, 'securelinks-dev-documents');
 const AUDIT_TABLE = table(process.env.AUDIT_TABLE, 'securelinks-dev-audit-events');
 const COUNTERS_TABLE = table(process.env.COUNTERS_TABLE, 'securelinks-dev-verification-counters');
 
@@ -33,6 +34,17 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
 
   const actor = supportActor(event);
   const timestamp = nowIso();
+
+  const doc = await db().send(
+    new GetCommand({
+      TableName: DOCUMENTS_TABLE,
+      Key: { documentId },
+      ProjectionExpression: 'documentId, customerId',
+    }),
+  );
+  if (!doc.Item || doc.Item.customerId !== customerId) {
+    return json(404, { message: 'Document not found for this customer.' });
+  }
 
   await db().send(
     new UpdateCommand({

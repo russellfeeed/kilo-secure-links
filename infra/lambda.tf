@@ -134,7 +134,8 @@ resource "aws_lambda_function" "support_reset" {
   timeout       = 10
   environment {
     variables = {
-      AUDIT_TABLE    = aws_dynamodb_table.audit_events.name
+      DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
+      AUDIT_TABLE     = aws_dynamodb_table.audit_events.name
       COUNTERS_TABLE = aws_dynamodb_table.verification_counters.name
     }
   }
