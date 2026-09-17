@@ -40,8 +40,9 @@ resource "aws_cloudfront_distribution" "web" {
 }
 
 resource "aws_wafv2_web_acl" "main" {
-  name  = "${var.project}-${var.environment}"
-  scope = "CLOUDFRONT"
+  provider = aws.us_east_1
+  name     = "${var.project}-${var.environment}"
+  scope    = "CLOUDFRONT"
 
   default_action {
     allow {}

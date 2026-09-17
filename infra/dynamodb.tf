@@ -18,6 +18,11 @@ resource "aws_dynamodb_table" "documents" {
     type = "S"
   }
 
+  attribute {
+    name = "createdAt"
+    type = "S"
+  }
+
   global_secondary_index {
     name            = "byCustomer"
     hash_key        = "customerId"
@@ -63,6 +68,11 @@ resource "aws_dynamodb_table" "audit_events" {
 
   attribute {
     name = "customerId"
+    type = "S"
+  }
+
+  attribute {
+    name = "timestamp"
     type = "S"
   }
 
