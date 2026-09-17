@@ -6,7 +6,8 @@ resource "aws_cloudfront_origin_access_control" "documents" {
 }
 
 resource "aws_cloudfront_distribution" "web" {
-  enabled = true
+  enabled     = true
+  web_acl_id  = aws_wafv2_web_acl.main.arn
 
   origin {
     domain_name              = aws_s3_bucket.documents.bucket_regional_domain_name
@@ -35,7 +36,6 @@ resource "aws_cloudfront_distribution" "web" {
 
   viewer_certificate {
     cloudfront_default_certificate = true
-    minimum_protocol_version       = "TLSv1.2_2021"
   }
 }
 
@@ -72,9 +72,4 @@ resource "aws_wafv2_web_acl" "main" {
       sampled_requests_enabled   = true
     }
   }
-}
-
-resource "aws_wafv2_web_acl_association" "cloudfront" {
-  resource_arn = aws_cloudfront_distribution.web.arn
-  web_acl_arn  = aws_wafv2_web_acl.main.arn
 }

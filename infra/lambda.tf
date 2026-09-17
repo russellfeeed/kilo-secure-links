@@ -2,6 +2,11 @@ data "archive_file" "backend" {
   type        = "zip"
   source_dir  = "${path.module}/../backend/dist"
   output_path = "${path.module}/../backend/dist.zip"
+
+  # dist/package.json ({type:module}) is written by the backend build step
+  # (npm run build:backend), not by tsc itself. Depend on its mtime so the
+  # zip (and therefore the Lambda source hash) refreshes when it changes.
+  excludes = ["*.tsbuildinfo", "*.d.ts", "*.d.ts.map"]
 }
 
 resource "aws_iam_role" "lambda_exec" {
