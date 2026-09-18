@@ -101,8 +101,46 @@ resource "aws_cloudfront_distribution" "web" {
   }
 
   ordered_cache_behavior {
-    path_pattern           = "/dev/harness*"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    path_pattern           = "/dev/reports/document-events"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "api"
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+    forwarded_values {
+      query_string = true
+      headers      = ["Content-Type", "Authorization"]
+      cookies {
+        forward = "none"
+      }
+    }
+  }
+
+  ordered_cache_behavior {
+    path_pattern           = "/dev/reports/usage"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "api"
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+    forwarded_values {
+      query_string = true
+      headers      = ["Content-Type", "Authorization"]
+      cookies {
+        forward = "none"
+      }
+    }
+  }
+
+  ordered_cache_behavior {
+    # Catch-all for Angular dev pages (/dev/playground, /dev/harness, ...).
+    # Must stay AFTER the API-specific /dev/ behaviors above.
+    path_pattern           = "/dev/*"
+    allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
     target_origin_id       = "web"
     viewer_protocol_policy = "redirect-to-https"

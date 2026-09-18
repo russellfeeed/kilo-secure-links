@@ -60,6 +60,17 @@ Local/integration-testing tool, not a product page.
 - **Errors:** the API's structured 400s (including the `missing` field list) render inline.
 - **Availability:** `/dev/upload` only exists while `enable_dev_routes = true` (dev tfvars); the page itself is harmless in other environments but its submit will 404.
 
+### `/dev/playground` — Developer playground walkthrough (REQ-023)
+
+One page that walks the full lifecycle against the live dev backend, in four auto-advancing steps:
+
+1. **Upload** — a compact form plus a one-click **sample PDF** (embedded base64, no file picker); posts to `POST /dev/upload` and captures the access token.
+2. **Check status** — `GET /dev/support-health` by the reference + Customer ID from step 1: viewed / failures since last success / total failures / locked, plus the newest-first audit trail.
+3. **Retrieve as recipient** — the recipient experience end-to-end: DOB input (pre-filled), `POST /verify` with the token, then a 5-minute presigned PDF link. Wrong DOB → 401 inline; expired → 410; lockout → 429 with `lockedUntil`.
+4. **Reporting** — what the lifecycle produced for that customer: `GET /dev/reports/usage` (documents uploaded/viewed, storage bytes, fallback notified, first/last upload) and `GET /dev/reports/document-events` (newest-first audit trail with document references).
+
+Hosted at `https://d16n45ee81q0jg.cloudfront.net/dev/playground` (CloudFront's `/dev/*` SPA behavior) and locally at `http://localhost:4300/dev/playground`.
+
 ## API endpoints
 
 Base URL: `https://oo4ulqov91.execute-api.eu-west-2.amazonaws.com` (CloudFront also proxies `/verify` and `/dev/upload`). IAM-auth routes require SigV4-signed requests from a principal with `execute-api:Invoke` on that route; the support group policy scopes support users to read/reset only.
@@ -102,6 +113,46 @@ Identical behaviour to `POST /documents`, no auth. Exists so the local harness c
 - Resolves the token via the `byAccessToken` GSI (+ full-row read), rejects expired links (410), checks the lockout counter first (429 + `lockedUntil`).
 - **Multi-factor verification (REQ-018):** the document's stored factor list must all match — DOB from `dateOfBirth`, other factors from `factorValues: {"postcode": "…"}`. Any wrong or missing candidate → 401, counter +1, `failure` audit; 5th failure → 15-minute lockout, `lockout` audit; attempts while locked → `access_attempt` audit + 429. All comparisons are timing-safe per-factor hashes.
 - Success → resets the counter, sets `viewedStatus: true` once, writes `success` audit, emits the `DocumentVerified` usage metric, returns 200 `{documentId, documentReference, downloadUrl, expiresInSeconds}` where `downloadUrl` is a 5-minute S3 presigned GET (inline PDF disposition, original filename).
+
+### Verification factors beyond DOB (REQ-018)
+
+DOB is the primary factor, but it is not hard-coded — verification runs against an ordered `verificationFactors` list stored on each document, so 2FA with any registered factor type is supported with **zero handler changes**.
+
+**Registered factor types** (`backend/src/factors.ts`):
+
+| Type | Typical value | Source at verify time |
+|---|---|---|
+| `dob` | `1990-01-31` | `dateOfBirth` field (always the primary factor) |
+| `postcode` | `SW1A 1AA` | `factorValues.postcode` |
+| `accountNumber` | account number | `factorValues.accountNumber` |
+| `otp` | one-time passcode | `factorValues.otp` |
+
+**At upload** (`POST /documents` / `POST /dev/upload`) the corner optionally attaches extra factors:
+
+```json
+{
+  "…": "…",
+  "additionalFactors": [{ "type": "postcode", "value": "SW1A 1AA" }]
+}
+```
+
+Each value is hashed with a per-factor salt (`securelinks:v1:<type>:` prefix) and appended to the document's ordered factor list; plaintext is never persisted. Unknown or duplicate types are rejected (400) or dropped defensively.
+
+**At verify** (`POST /verify`) the recipient supplies every stored factor:
+
+```json
+{ "token": "…", "dateOfBirth": "1990-01-31", "factorValues": { "postcode": "SW1A 1AA" } }
+```
+
+**All** stored factors must match (timing-safe hash comparison). A wrong or missing candidate counts exactly like a wrong DOB: 401, failure counter +1, `failure` audit event, and the shared 5-failure/15-minute lockout applies across all factors.
+
+**Adding a new factor type** (e.g. NHS number, last-four-of-passport):
+
+1. One line in `backend/src/factors.ts`: `registerFactor({ type: 'nhsNumber', saltPrefix: 'securelinks:v1:nhs:' });`
+2. Unit-test the registry entry (`backend/test/factors.test.ts`).
+3. Build + deploy (`npm run build:backend`, then `terraform apply` picks up the new Lambda `source_code_hash`).
+
+No changes are needed in `upload.ts`, `verify.ts`, the DB schema, or any frontend page: the upload accepts the new type in `additionalFactors`, verify resolves candidates from `factorValues[type]`, and hashing/lockout/audit all follow the generic factor path.
 
 ### `GET /support/health?documentId=…&customerId=…` — support read model (IAM, REQ-007)
 
@@ -177,10 +228,10 @@ npm --workspace backend run test
 ### Frontend: local dev server
 
 ```powershell
-npm run dev:frontend   # port 4200; proxy.conf.json forwards /verify, /documents, /dev/upload to the live API
+npm run dev:frontend   # port 4200; proxy.conf.json forwards /verify, /documents, /dev/upload, /dev/support-health, /dev/reports to the live API
 ```
 
-Harness: `http://localhost:4200/dev/harness`. DOB demo: `http://localhost:4200/d/<token>`.
+Harness: `http://localhost:4200/dev/harness`. Playground: `http://localhost:4200/dev/playground`. DOB demo: `http://localhost:4200/d/<token>`.
 
 ### Frontend: build + host
 

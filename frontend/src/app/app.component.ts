@@ -10,6 +10,9 @@ import { RouterLink, RouterOutlet } from '@angular/router';
     <header role="banner">
       <nav aria-label="Primary">
         <a routerLink="/health" aria-label="SecureLinks home">SecureLinks</a>
+        <a routerLink="/dev/playground">Playground</a>
+        <a routerLink="/dev/harness">Upload harness</a>
+        <a routerLink="/support/health">Support health</a>
       </nav>
     </header>
     <main id="main" role="main" tabindex="-1">

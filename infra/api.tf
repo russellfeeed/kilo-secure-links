@@ -174,3 +174,20 @@ resource "aws_apigatewayv2_route" "dev_support_health" {
   route_key = "GET /dev/support-health"
   target    = "integrations/${aws_apigatewayv2_integration.support_health.id}"
 }
+
+# Dev-only unsigned aliases of the REQ-006/REQ-015 reporting endpoints for the
+# playground's reporting step. Gated by enable_dev_routes; the handlers still
+# scope every query to the requested customerId.
+resource "aws_apigatewayv2_route" "dev_report" {
+  count     = var.enable_dev_routes ? 1 : 0
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /dev/reports/document-events"
+  target    = "integrations/${aws_apigatewayv2_integration.report.id}"
+}
+
+resource "aws_apigatewayv2_route" "dev_usage" {
+  count     = var.enable_dev_routes ? 1 : 0
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /dev/reports/usage"
+  target    = "integrations/${aws_apigatewayv2_integration.usage.id}"
+}
