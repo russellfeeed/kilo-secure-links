@@ -83,6 +83,24 @@ resource "aws_cloudfront_distribution" "web" {
   }
 
   ordered_cache_behavior {
+    path_pattern           = "/dev/support-health"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "api"
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+    forwarded_values {
+      query_string = true
+      headers      = ["Content-Type", "Authorization"]
+      cookies {
+        forward = "none"
+      }
+    }
+  }
+
+  ordered_cache_behavior {
     path_pattern           = "/dev/harness*"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]

@@ -189,6 +189,8 @@
       "Action": [
         "cloudfront:CreateDistribution",
         "cloudfront:CreateInvalidation",
+        "cloudfront:GetInvalidation",
+        "cloudfront:ListInvalidations",
         "cloudfront:DeleteDistribution",
         "cloudfront:GetDistribution",
         "cloudfront:UpdateDistribution",

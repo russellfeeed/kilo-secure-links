@@ -151,12 +151,13 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       new UpdateCommand({
         TableName: COUNTERS_TABLE,
         Key: { documentId },
+        // failedCount resets on success; totalFailed is a lifetime tally for support reporting.
         UpdateExpression: lockedUntil
-          ? 'SET failedCount = :c, lockedUntil = :l'
-          : 'SET failedCount = :c',
+          ? 'SET failedCount = :c, lockedUntil = :l ADD totalFailed :one'
+          : 'SET failedCount = :c ADD totalFailed :one',
         ExpressionAttributeValues: lockedUntil
-          ? { ':c': failedCount, ':l': lockedUntil }
-          : { ':c': failedCount },
+          ? { ':c': failedCount, ':l': lockedUntil, ':one': 1 }
+          : { ':c': failedCount, ':one': 1 },
       }),
     );
     emitCountMetric('VerificationFailure', { CustomerId: customerId });

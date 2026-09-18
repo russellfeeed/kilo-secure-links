@@ -23,11 +23,23 @@ resource "aws_dynamodb_table" "documents" {
     type = "S"
   }
 
+  attribute {
+    name = "documentReference"
+    type = "S"
+  }
+
   global_secondary_index {
     name            = "byCustomer"
     hash_key        = "customerId"
     range_key       = "createdAt"
     projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "byReference"
+    hash_key        = "documentReference"
+    range_key       = "customerId"
+    projection_type = "KEYS_ONLY"
   }
 
   global_secondary_index {

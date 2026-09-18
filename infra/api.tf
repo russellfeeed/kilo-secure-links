@@ -164,3 +164,13 @@ resource "aws_apigatewayv2_route" "dev_upload" {
   route_key = "POST /dev/upload"
   target    = "integrations/${aws_apigatewayv2_integration.upload.id}"
 }
+
+# Dev-only unsigned alias of GET /support/health so the support page can be
+# exercised from the local dev server without AWS credentials in the browser.
+# Same enable_dev_routes gate; ownership checks still apply inside the Lambda.
+resource "aws_apigatewayv2_route" "dev_support_health" {
+  count     = var.enable_dev_routes ? 1 : 0
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /dev/support-health"
+  target    = "integrations/${aws_apigatewayv2_integration.support_health.id}"
+}

@@ -62,9 +62,11 @@ const SMS_TEMPLATE = (link: string): string =>
     @if (state === 'success' && result) {
       <section aria-live="polite">
         <h2>Uploaded</h2>
+        <p>Document reference: <code>{{ documentReference }}</code> — Customer ID: <code>{{ customerId }}</code></p>
         <p>Document ID: <code>{{ result.documentId }}</code></p>
         <p>Access URL: <a [href]="accessPath" target="_blank" rel="noopener">{{ result.accessUrl }}</a></p>
         <p>Expires: {{ result.expiryDate }}</p>
+        <p class="hint">Look this upload up on the support health page using the reference and Customer ID above.</p>
         <h3>Simulated SMS preview</h3>
         <blockquote class="sms">{{ smsPreview }}</blockquote>
         <p class="hint">Template: <code>sms:+447700900077?body=&lt;link&gt;</code> — display only.</p>

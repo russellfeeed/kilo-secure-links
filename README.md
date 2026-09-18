@@ -40,7 +40,7 @@ The patient-facing page. This is where the secure link from the upstream SMS lan
 The support tool for tracing one document through the delivery pipeline.
 
 - **Purpose:** answer "why did this patient not get / cannot open their document?" for a specific document, using only data SecureLinks owns.
-- **Inputs:** Document ID (the `documentId` UUID from the upload response) **and** Customer ID (the tenant used at upload). Both required; the pair is ownership-checked server-side (wrong customer → 404), so a support user cannot inspect another tenant's document.
+- **Inputs:** Document reference **or** Document ID (auto-detected — references like `woo1` or `REF-123` look up via the `byReference` GSI; UUIDs via the primary key) **and** Customer ID. Both required; the pair is ownership-checked server-side (wrong customer → 404), so a support user cannot inspect another tenant's document. The harness success panel shows both values to paste here.
 - **Output:** document reference, `viewed` yes/no, DOB failure count, locked yes/no (+ until when), and the 20 most recent audit events newest-first (`upload`, `access_attempt`, `success`, `failure`, `lockout`, `lockout_reset`, `expired`, `fallback`).
 - **Scope note:** the page shows what SecureLinks recorded; actual SMS carrier state lives in Prism/Firetext. A document with no `success` event and an old `upload` is the trigger for the REQ-003 physical-letter fallback (not yet built).
 - **Next action:** if `locked: yes`, run the audited reset (`POST /support/reset-lockout`) — see `docs/runbooks/support-direct-db-access.md` for the Phase 1 interim procedure.
@@ -105,7 +105,7 @@ Identical behaviour to `POST /documents`, no auth. Exists so the local harness c
 
 ### `GET /support/health?documentId=…&customerId=…` — support read model (IAM, REQ-007)
 
-Backs the `/support/health` page. Ownership-checked pair; returns viewed/failed/locked state plus the 20 newest audit events. 400 if either parameter missing, 404 on tenant mismatch or unknown document.
+Backs the `/support/health` page. Accepts `reference` **or** `documentId`, plus the ownership-checked `customerId`; returns viewed/failed/locked state plus the 20 newest audit events. 400 if parameters missing, 404 on tenant mismatch, unknown reference, or unknown document.
 
 ### `POST /support/reset-lockout` — audited lockout reset (IAM, REQ-007)
 

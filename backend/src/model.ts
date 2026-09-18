@@ -49,5 +49,7 @@ export interface AuditEvent {
 export interface VerificationCounter {
   documentId: string;
   failedCount: number;
+  /** Lifetime failed verification attempts (never reset). */
+  totalFailed?: number;
   lockedUntil?: string;
 }
