@@ -94,12 +94,13 @@ resource "aws_iam_role_policy_attachment" "lambda_data" {
 }
 
 resource "aws_lambda_function" "health" {
-  function_name = "${var.project}-${var.environment}-health"
-  role          = aws_iam_role.lambda_exec.arn
-  runtime       = "nodejs20.x"
-  handler       = "health.handler"
-  filename      = data.archive_file.backend.output_path
-  timeout       = 5
+  function_name    = "${var.project}-${var.environment}-health"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "nodejs20.x"
+  handler          = "health.handler"
+  filename         = data.archive_file.backend.output_path
+  source_code_hash = data.archive_file.backend.output_base64sha256
+  timeout          = 5
   environment {
     variables = {
       DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
@@ -110,12 +111,13 @@ resource "aws_lambda_function" "health" {
 }
 
 resource "aws_lambda_function" "support_health" {
-  function_name = "${var.project}-${var.environment}-support-health"
-  role          = aws_iam_role.lambda_exec.arn
-  runtime       = "nodejs20.x"
-  handler       = "support/health.handler"
-  filename      = data.archive_file.backend.output_path
-  timeout       = 10
+  function_name    = "${var.project}-${var.environment}-support-health"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "nodejs20.x"
+  handler          = "support/health.handler"
+  filename         = data.archive_file.backend.output_path
+  source_code_hash = data.archive_file.backend.output_base64sha256
+  timeout          = 10
   environment {
     variables = {
       DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
@@ -126,33 +128,35 @@ resource "aws_lambda_function" "support_health" {
 }
 
 resource "aws_lambda_function" "support_reset" {
-  function_name = "${var.project}-${var.environment}-support-reset"
-  role          = aws_iam_role.lambda_exec.arn
-  runtime       = "nodejs20.x"
-  handler       = "support/resetLockout.handler"
-  filename      = data.archive_file.backend.output_path
-  timeout       = 10
+  function_name    = "${var.project}-${var.environment}-support-reset"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "nodejs20.x"
+  handler          = "support/resetLockout.handler"
+  filename         = data.archive_file.backend.output_path
+  source_code_hash = data.archive_file.backend.output_base64sha256
+  timeout          = 10
   environment {
     variables = {
       DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
       AUDIT_TABLE     = aws_dynamodb_table.audit_events.name
-      COUNTERS_TABLE = aws_dynamodb_table.verification_counters.name
+      COUNTERS_TABLE  = aws_dynamodb_table.verification_counters.name
     }
   }
 }
 
 resource "aws_lambda_function" "upload" {
-  function_name = "${var.project}-${var.environment}-upload"
-  role          = aws_iam_role.lambda_exec.arn
-  runtime       = "nodejs20.x"
-  handler       = "upload.handler"
-  filename      = data.archive_file.backend.output_path
-  timeout       = 30
-  memory_size   = 256
+  function_name    = "${var.project}-${var.environment}-upload"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "nodejs20.x"
+  handler          = "upload.handler"
+  filename         = data.archive_file.backend.output_path
+  source_code_hash = data.archive_file.backend.output_base64sha256
+  timeout          = 30
+  memory_size      = 256
   environment {
     variables = {
-      DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
-      AUDIT_TABLE     = aws_dynamodb_table.audit_events.name
+      DOCUMENTS_TABLE  = aws_dynamodb_table.documents.name
+      AUDIT_TABLE      = aws_dynamodb_table.audit_events.name
       DOCUMENTS_BUCKET = aws_s3_bucket.documents.id
       ACCESS_URL_BASE  = "https://${aws_cloudfront_distribution.web.domain_name}"
     }
@@ -160,33 +164,50 @@ resource "aws_lambda_function" "upload" {
 }
 
 resource "aws_lambda_function" "verify" {
-  function_name = "${var.project}-${var.environment}-verify"
-  role          = aws_iam_role.lambda_exec.arn
-  runtime       = "nodejs20.x"
-  handler       = "verify.handler"
-  filename      = data.archive_file.backend.output_path
-  timeout       = 10
+  function_name    = "${var.project}-${var.environment}-verify"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "nodejs20.x"
+  handler          = "verify.handler"
+  filename         = data.archive_file.backend.output_path
+  source_code_hash = data.archive_file.backend.output_base64sha256
+  timeout          = 10
   environment {
     variables = {
-      DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
-      AUDIT_TABLE     = aws_dynamodb_table.audit_events.name
-      COUNTERS_TABLE  = aws_dynamodb_table.verification_counters.name
+      DOCUMENTS_TABLE  = aws_dynamodb_table.documents.name
+      AUDIT_TABLE      = aws_dynamodb_table.audit_events.name
+      COUNTERS_TABLE   = aws_dynamodb_table.verification_counters.name
       DOCUMENTS_BUCKET = aws_s3_bucket.documents.id
     }
   }
 }
 
 resource "aws_lambda_function" "report" {
-  function_name = "${var.project}-${var.environment}-report"
-  role          = aws_iam_role.lambda_exec.arn
-  runtime       = "nodejs20.x"
-  handler       = "report.handler"
-  filename      = data.archive_file.backend.output_path
-  timeout       = 15
+  function_name    = "${var.project}-${var.environment}-report"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "nodejs20.x"
+  handler          = "report.handler"
+  filename         = data.archive_file.backend.output_path
+  source_code_hash = data.archive_file.backend.output_base64sha256
+  timeout          = 15
   environment {
     variables = {
       DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
       AUDIT_TABLE     = aws_dynamodb_table.audit_events.name
+    }
+  }
+}
+
+resource "aws_lambda_function" "usage" {
+  function_name    = "${var.project}-${var.environment}-usage"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "nodejs20.x"
+  handler          = "usage.handler"
+  filename         = data.archive_file.backend.output_path
+  source_code_hash = data.archive_file.backend.output_base64sha256
+  timeout          = 15
+  environment {
+    variables = {
+      DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
     }
   }
 }

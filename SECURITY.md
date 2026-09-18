@@ -16,7 +16,7 @@ This document describes the security mechanisms in place, where each is enforced
 | PDF payloads | SSE-KMS, dedicated CMK (`infra/kms.tf`), S3 Bucket Keys on | `PutObject` with `ServerSideEncryption: aws:kms` (`backend/src/upload.ts`) |
 | Document metadata rows | DynamoDB default encryption + PITR | `infra/dynamodb.tf` |
 | Audit events | DynamoDB encryption + PITR | append-only, see §4 |
-| Verification value (DOB) | **Never stored in plaintext** — salted SHA-256 hash only | `hashVerificationValue` (`backend/src/documents.ts`) |
+| Verification values (DOB + any additional factors) | **Never stored in plaintext** — per-factor salted SHA-256 hashes only (`securelinks:v1:<type>:` prefixes) | factor registry (`backend/src/factors.ts`) |
 | Access tokens | **Never stored raw** — SHA-256 hash only, looked up via `byAccessToken` GSI (KEYS_ONLY projection, so the index cannot leak row data) | `backend/src/upload.ts`, `backend/src/verify.ts` |
 | Verification counters | DynamoDB encryption + PITR | |
 | In transit | CloudFront enforces `redirect-to-https` on every behavior; API origin is `https-only`; custom origin limited to TLSv1.2 | `infra/cdn-waf.tf` |
@@ -28,9 +28,9 @@ Retention: document rows carry a TTL equal to the corner-supplied `expiryDate`; 
 | Route | Auth | Enforcement |
 |---|---|---|
 | `POST /documents` | AWS_IAM (SigV4) | API Gateway route; callers need `execute-api:Invoke` |
-| `GET /reports/document-events` | AWS_IAM | same |
+| `GET /reports/document-events`, `GET /reports/usage` | AWS_IAM | same |
 | `GET /support/health`, `POST /support/reset-lockout` | AWS_IAM | support group policies grant only these routes + table reads |
-| `POST /verify` | Public (token + DOB) | capability model, see §3 |
+| `POST /verify` | Public (token + verification factors) | capability model, see §3 |
 | `GET /health` | Public | no data access |
 | `POST /dev/upload` | **None — dev only** | route exists only while `enable_dev_routes = true` (dev tfvars); abuse limited to creating dev documents |
 
@@ -42,12 +42,12 @@ Least privilege:
 - `securelinks-dev-support` group: `GetItem`/`Query` reads and `execute-api:Invoke` on the two support routes only. No writes.
 - Deploying human: `infra/deployer-policy.template.json` is least-privilege, resource-scoped to `securelinks-dev-*` ARNs, with `iam:PassRole` conditioned on `lambda.amazonaws.com`.
 
-## 3. Document access model (link + DOB)
+## 3. Document access model (link + verification factors)
 
 - **Capability token:** 16 random bytes → 22 base64url chars (128-bit entropy), generated with Node crypto CSPRNG. Only its SHA-256 hash is persisted; DB compromise does not expose live links. Verification is a hash lookup, and comparison uses `timingSafeEqual` (`backend/src/documents.ts`).
-- **DOB as second factor:** salted SHA-256 (`securelinks:v1:dob:` prefix) stored on the row; plaintext DOB exists only transiently during upload/verify.
-- **Rate limiting & lockout:** 5 wrong DOBs → 15-minute lockout held in `verification_counters`; correct DOB during lockout is still rejected; attempts-while-locked are audited (`access_attempt`) (`backend/src/verify.ts`).
-- **Presigned download:** issued only after successful DOB verification, 5-minute TTL, `inline` content disposition with sanitised filename, KMS-decrypted via the Lambda role — no public S3 access path exists.
+- **Pluggable verification factors (REQ-018):** every document stores an ordered `verificationFactors` list (per-factor salted SHA-256 hashes — `securelinks:v1:<type>:` prefixes); DOB is always present as the primary factor, additional factors (`postcode`, `accountNumber`, `otp`) may be supplied at upload. Verification requires **all** stored factors to match, with candidates resolved from the request (`dateOfBirth` + `factorValues`). Values are never persisted in plaintext; the registry (`backend/src/factors.ts`) makes new factors a one-call addition with no handler redesign.
+- **Rate limiting & lockout:** 5 failed factor checks → 15-minute lockout held in `verification_counters`; correct factors during lockout are still rejected; attempts-while-locked are audited (`access_attempt`) (`backend/src/verify.ts`).
+- **Presigned download:** issued only after successful factor verification, 5-minute TTL, `inline` content disposition with sanitised filename, KMS-decrypted via the Lambda role — no public S3 access path exists.
 - **WAF:** AWS managed rule groups (CommonRuleSet) attached to the CloudFront distribution (`CLOUDFRONT` scope, us-east-1) in front of all routes.
 
 ## 4. Audit trail & integrity
@@ -57,7 +57,9 @@ Least privilege:
 - Writes use `attribute_not_exists(eventId)` condition expressions — no in-place mutation by the application.
 - The Lambda execution role carries an explicit IAM **Deny** on delete/batch-write against the audit table (`infra/lambda.tf`), so application code cannot rewrite history even if compromised.
 - Point-in-time recovery is enabled on all three tables.
-- Queries for Prism (`GET /reports/document-events`) are ownership-filtered by `customerId`.
+- Queries for Prism (`GET /reports/document-events`) are ownership-filtered by `customerId`; the usage aggregation (`GET /reports/usage`) is likewise customer-scoped.
+
+**Metrics hygiene (REQ-015):** the CloudWatch EMF stream (`DocumentUploaded`, `DocumentVerified`, `VerificationFailure`) carries only the tenant identifier (`CustomerId` dimension) and counters — no document IDs, no hashes, no recipient data.
 
 ## 5. Multi-tenant isolation (REQ-009)
 

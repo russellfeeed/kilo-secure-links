@@ -11,8 +11,11 @@ import {
   newAccessToken,
   newDocumentId,
 } from './documents.js';
+import { buildFactorList, hashFactor, isRegisteredFactor } from './factors.js';
+import { emitCountMetric } from './metrics.js';
 import { json, nowIso, supportActor } from './http.js';
-import type { DocumentItem } from './model.js';
+import type { DocumentItem, StoredFactor } from './model.js';
+
 
 const DOCUMENTS_TABLE = table(process.env.DOCUMENTS_TABLE, 'securelinks-dev-documents');
 const AUDIT_TABLE = table(process.env.AUDIT_TABLE, 'securelinks-dev-audit-events');
@@ -33,6 +36,8 @@ interface UploadBody {
   originalFilename?: string;
   documentReference?: string;
   pdfBase64?: string;
+  /** REQ-018: optional extra verification factors (e.g. postcode, accountNumber). */
+  additionalFactors?: Array<{ type?: string; value?: string }>;
 }
 
 const REQUIRED_FIELDS: Array<keyof UploadBody> = [
@@ -118,6 +123,24 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   const createdAt = nowIso();
   const s3Key = documentS3Key(documentId);
 
+  const additionalFactors: StoredFactor[] = [];
+  if (Array.isArray(body.additionalFactors)) {
+    for (const factor of body.additionalFactors) {
+      const type = typeof factor?.type === 'string' ? factor.type.trim() : '';
+      const value = typeof factor?.value === 'string' ? factor.value.trim() : '';
+      if (!isRegisteredFactor(type) || value.length === 0) {
+        return json(400, {
+          message: `additionalFactors entries need a registered type (${type || 'missing'}) and a non-empty value.`,
+        });
+      }
+      additionalFactors.push({ type, hash: hashFactor(type, value) });
+    }
+  }
+  const verificationFactors = buildFactorList(
+    { type: 'dob', hash: hashVerificationValue(verificationValue) },
+    additionalFactors,
+  );
+
   await s3client().send(
     new PutObjectCommand({
       Bucket: DOCUMENTS_BUCKET,
@@ -142,6 +165,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     createdAt,
     fallbackStatus: 'pending',
     ttl,
+    sizeBytes: pdf.length,
+    verificationFactors,
   };
 
   await db().send(
@@ -167,6 +192,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
       ConditionExpression: 'attribute_not_exists(eventId)',
     }),
   );
+
+  emitCountMetric('DocumentUploaded', { CustomerId: customerId });
 
   return json(201, {
     documentId,

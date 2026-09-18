@@ -4,7 +4,9 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { randomUUID } from 'node:crypto';
 import { db, table } from './db.js';
-import { hashAccessToken, verifyVerificationValue } from './documents.js';
+import { hashAccessToken } from './documents.js';
+import { buildFactorList, candidateFor, verifyFactor } from './factors.js';
+import { emitCountMetric } from './metrics.js';
 import { json, nowIso } from './http.js';
 import type { AuditEventType, DocumentItem, VerificationCounter } from './model.js';
 
@@ -26,6 +28,8 @@ function s3client(): S3Client {
 interface VerifyBody {
   token?: string;
   dateOfBirth?: string;
+  /** REQ-018: candidate values for additional factors, keyed by factor type. */
+  factorValues?: Record<string, string>;
 }
 
 async function audit(documentId: string, customerId: string, type: AuditEventType, actor: string, detail?: string): Promise<void> {
@@ -131,10 +135,16 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     return json(429, { message: 'Too many attempts. Try again later.', lockedUntil: counter.lockedUntil });
   }
 
-  const storedHash = doc.verificationValueHash as string;
-  const ok = verifyVerificationValue(dateOfBirth, storedHash);
+  const storedFactors = buildFactorList(
+    { type: 'dob', hash: doc.verificationValueHash as string },
+    doc.verificationFactors,
+  );
+  const allMatch = storedFactors.every((factor) => {
+    const candidate = candidateFor(factor.type, body);
+    return typeof candidate === 'string' && verifyFactor(factor.type, candidate, factor.hash);
+  });
 
-  if (!ok) {
+  if (!allMatch) {
     const failedCount = Number(counter.failedCount ?? 0) + 1;
     const lockedUntil = lockoutUntilFrom(failedCount, Date.now());
     await db().send(
@@ -149,11 +159,12 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
           : { ':c': failedCount },
       }),
     );
+    emitCountMetric('VerificationFailure', { CustomerId: customerId });
     await audit(documentId, customerId, lockedUntil ? 'lockout' : 'failure', 'recipient:anonymous');
     if (lockedUntil) {
       return json(429, { message: 'Too many attempts. Try again later.', lockedUntil });
     }
-    return json(401, { message: 'Date of birth does not match our records.' });
+    return json(401, { message: 'Verification details do not match our records.' });
   }
 
   await db().send(
@@ -178,6 +189,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   }
 
   await audit(documentId, customerId, 'success', 'recipient:anonymous');
+  emitCountMetric('DocumentVerified', { CustomerId: customerId });
 
   const url = await getSignedUrl(
     s3client(),

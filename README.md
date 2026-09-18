@@ -2,7 +2,7 @@
 
 SecureLinks is a secure document delivery service: a healthcare provider (or its orchestration engine, Prism) uploads a patient's PDF letter with metadata including the patient's date of birth and a retention expiry date; the service stores the document encrypted, validates the metadata, and returns a short, non-guessable access link (~61 characters, safe for a single SMS segment) that the provider's SMS system sends to the patient. When the patient opens the link, they must correctly enter their date of birth — with attempts limited and lockouts after repeated failures — before the document is revealed. Every step (upload, access attempts, verification successes and failures, lockouts and resets) is written to an immutable audit trail, queryable through a reporting API for delivery and governance metrics. SecureLinks deliberately does not send SMS itself or decide clinical routing (consent codes, physical-letter fallback); those remain upstream responsibilities — the application's job is to make the stored document reachable by exactly one verified recipient and nothing more.
 
-Greenfield repo. Scope: foundation + Increments 1–2 (REQ-007, REQ-008, REQ-001, REQ-002 rescoped, REQ-021).
+Greenfield repo. Scope: foundation + Increments 1–3 (REQ-007, REQ-008, REQ-001, REQ-002 rescoped, REQ-021, REQ-015, REQ-018; REQ-003 on hold).
 
 ## Layout
 
@@ -79,12 +79,14 @@ The corner's integration point. Accepts one document per call:
   "expiryDate": "2026-09-30",
   "originalFilename": "letter.pdf",
   "documentReference": "REF-123",
-  "pdfBase64": "JVBERi0xLjQ…"
+  "pdfBase64": "JVBERi0xLjQ…",
+  "additionalFactors": [{ "type": "postcode", "value": "SW1A 1AA" }]
 }
 ```
 
-- Validates all seven fields (400 + `missing` list), Base64-decodes, enforces `%PDF-` magic bytes and a 10 MB cap, requires a future expiry.
-- Stores the PDF in S3 (`documents/<uuid>.pdf`, SSE-KMS), writes the document row (SHA-256 DOB hash, SHA-256 access-token hash, TTL from expiry, `viewedStatus: false`) and an `upload` audit event.
+- Validates the seven mandatory fields (400 + `missing` list), Base64-decodes, enforces `%PDF-` magic bytes and a 10 MB cap, requires a future expiry.
+- `additionalFactors` (REQ-018, optional): extra verification factors from the registered set (`postcode`, `accountNumber`, `otp`); unknown types → 400. Every factor's value is hashed (per-factor salt) and stored in the row's ordered `verificationFactors` list — plaintext is never persisted.
+- Stores the PDF in S3 (`documents/<uuid>.pdf`, SSE-KMS) and the document row: factor hashes, SHA-256 access-token hash, decoded `sizeBytes` (REQ-015), TTL from expiry, `viewedStatus: false`, plus an `upload` audit event.
 - 201 → `{documentId, accessUrl, expiryDate}`. `accessUrl` is `https://<cloudfront>/d/<token>` — the short link the corner embeds in its SMS. The access token is never stored; only its hash.
 
 ### `POST /dev/upload` — unsigned upload alias (dev only, REQ-021)
@@ -98,8 +100,8 @@ Identical behaviour to `POST /documents`, no auth. Exists so the local harness c
 ```
 
 - Resolves the token via the `byAccessToken` GSI (+ full-row read), rejects expired links (410), checks the lockout counter first (429 + `lockedUntil`).
-- Timing-safe DOB comparison. Wrong DOB → 401, counter +1, `failure` audit; 5th failure → 15-minute lockout, `lockout` audit; attempts while locked → `access_attempt` audit + 429.
-- Success → resets the counter, sets `viewedStatus: true` once, writes `success` audit, returns 200 `{documentId, documentReference, downloadUrl, expiresInSeconds}` where `downloadUrl` is a 5-minute S3 presigned GET (inline PDF disposition, original filename).
+- **Multi-factor verification (REQ-018):** the document's stored factor list must all match — DOB from `dateOfBirth`, other factors from `factorValues: {"postcode": "…"}`. Any wrong or missing candidate → 401, counter +1, `failure` audit; 5th failure → 15-minute lockout, `lockout` audit; attempts while locked → `access_attempt` audit + 429. All comparisons are timing-safe per-factor hashes.
+- Success → resets the counter, sets `viewedStatus: true` once, writes `success` audit, emits the `DocumentVerified` usage metric, returns 200 `{documentId, documentReference, downloadUrl, expiresInSeconds}` where `downloadUrl` is a 5-minute S3 presigned GET (inline PDF disposition, original filename).
 
 ### `GET /support/health?documentId=…&customerId=…` — support read model (IAM, REQ-007)
 
@@ -116,6 +118,14 @@ All three required. Ownership-checked (wrong customer → 404). Zeros the failur
 ### `GET /reports/document-events` — reporting API (IAM, REQ-006)
 
 The Prism-facing audit query. Params: `customerId` (required), `from`/`to` (ISO window), `limit` (1–100, default 50), `nextToken` (opaque, base64url). Queries the `byCustomerTime` GSI newest-first, post-filters to the customer, and joins `documentReference` only for documents that customer owns. Returns `{customerId, events[], generatedBy, nextToken?}` where each event is `{documentId, eventId, timestamp, type, actor, documentReference?, detail?}`.
+
+### `GET /reports/usage?customerId=…` — commercial usage aggregation (IAM, REQ-015)
+
+Billing and capacity reporting. Params: `customerId` (required), optional `nextToken` (opaque). Aggregates the customer's documents from the `byCustomer` GSI (internal pagination up to 4,000 rows) into `{documentsUploaded, documentsViewed, storageBytes, fallbackNotified, firstUploadAt, lastUploadAt, scanned, truncated, nextToken?}`. `storageBytes` sums the decoded PDF sizes recorded at upload (documents uploaded before REQ-015 carry no `sizeBytes` and count as 0). Attribution: `generatedBy` carries the caller's IAM ARN.
+
+### Usage metrics stream (REQ-015)
+
+Handlers also emit CloudWatch Embedded Metric Format lines (`SecureLinks` namespace, `CustomerId` dimension): `DocumentUploaded`, `DocumentVerified`, `VerificationFailure`. These feed billing dashboards, alarms, and capacity planning without any PHI in the metric payload (dimensions carry only the tenant identifier).
 
 Prism/Firetext own SMS dispatch — SecureLinks never sends SMS (REQ-002 rescoped to short-link issuance).
 

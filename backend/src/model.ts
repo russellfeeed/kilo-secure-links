@@ -13,6 +13,10 @@ export interface DocumentItem {
   fallbackStatus: string;
   fallbackTriggeredAt?: string;
   ttl: number;
+  /** REQ-015: decoded PDF size in bytes, for storage utilisation reporting. */
+  sizeBytes?: number;
+  /** REQ-018: ordered verification factors on this document (dob always first). */
+  verificationFactors?: StoredFactor[];
 }
 
 export type AuditEventType =
@@ -25,6 +29,12 @@ export type AuditEventType =
   | 'fallback'
   | 'expired'
   | 'deleted';
+
+/** REQ-018: one stored verification factor on a document. */
+export interface StoredFactor {
+  type: string;
+  hash: string;
+}
 
 export interface AuditEvent {
   documentId: string;

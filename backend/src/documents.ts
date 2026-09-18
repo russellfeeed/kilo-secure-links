@@ -1,22 +1,12 @@
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-
-const VERIFICATION_HASH_SALT = 'securelinks:v1:dob:';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { hashFactor, verifyFactor } from './factors.js';
 
 export function hashVerificationValue(value: string): string {
-  return createHash('sha256').update(`${VERIFICATION_HASH_SALT}${value}`).digest('hex');
+  return hashFactor('dob', value);
 }
 
 export function verifyVerificationValue(candidate: string, storedHash: string): boolean {
-  if (typeof storedHash !== 'string' || storedHash.length === 0) return false;
-  let b: Buffer;
-  try {
-    b = Buffer.from(storedHash, 'hex');
-  } catch {
-    return false;
-  }
-  const candidateHash = hashVerificationValue(candidate);
-  const a = Buffer.from(candidateHash, 'hex');
-  return a.length === b.length && a.length > 0 && timingSafeEqual(a, b);
+  return verifyFactor('dob', candidate, storedHash);
 }
 
 export function newDocumentId(): string {
