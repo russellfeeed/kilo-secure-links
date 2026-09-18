@@ -6,7 +6,7 @@ Greenfield repo. Scope: foundation + Increments 1–3 (REQ-007, REQ-008, REQ-001
 
 ## Layout
 
-- `frontend/` — Angular (REQ-020) recipient + support shell + dev harness.
+- `frontend/` — Angular 18 (REQ-020) with Angular Material 18 and Flex-Layout: recipient + support shell + playground + harness.
 - `backend/` — Node 20 Lambda handlers behind API Gateway HTTP API.
 - `infra/` — Terraform (REQ-017) for all AWS: S3 + DynamoDB + API Gateway + Lambda + CloudFront + WAF.
 - `docs/runbooks/support-direct-db-access.md` — Phase 1 REQ-007 interim interface (direct DB + audited reset Lambda).
@@ -22,7 +22,7 @@ Greenfield repo. Scope: foundation + Increments 1–3 (REQ-007, REQ-008, REQ-001
 
 ## Pages
 
-All pages are served by CloudFront from the private `securelinks-dev-web` S3 bucket (SPA fallback: unknown paths serve `index.html`, Angular router decides). Every page uses the shared WCAG 2.1 AA shell: skip link, banner nav, `<main>` landmark, footer noting that SMS dispatch is owned upstream.
+All pages are served by CloudFront from the private `securelinks-dev-web` S3 bucket (SPA fallback: unknown paths serve `index.html`, Angular router decides). Every page uses the shared WCAG 2.1 AA shell: skip link, Material toolbar nav, `<main>` landmark, footer noting that SMS dispatch is owned upstream. Layout is Angular Flex-Layout (`fxLayout` / `fxFlex`); components are Angular Material (toolbar, cards, form fields, stepper, lists). Primary colour is NHS Blue (`#005eb8`).
 
 ### `/d/:token` — Recipient document access (REQ-001)
 

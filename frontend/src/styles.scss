@@ -1,0 +1,73 @@
+@use 'sass:map';
+@use '@angular/material' as mat;
+
+@include mat.core();
+
+// NHS-inspired palette: primary #005eb8 (NHS Blue), accent #00703c (NHS Green).
+$nhs-blue: (500: #005eb8, 600: #004f9d, 700: #00417f, 800: #003767, 900: #00294c);
+$nhs-green: (500: #00703c, 600: #006235, 700: #00542d, 800: #004727, 900: #003b20);
+
+$sl-primary: mat.m2-define-palette(map.merge(mat.$m2-blue-palette, $nhs-blue), 500);
+$sl-accent: mat.m2-define-palette(map.merge(mat.$m2-green-palette, $nhs-green), 500);
+$sl-warn: mat.m2-define-palette(mat.$m2-red-palette);
+
+$sl-theme: mat.m2-define-light-theme((
+  color: (primary: $sl-primary, accent: $sl-accent, warn: $sl-warn),
+  typography: mat.m2-define-typography-config(),
+  density: 0,
+));
+
+@include mat.all-component-themes($sl-theme);
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f0f4f8;
+}
+
+a {
+  color: #005eb8;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+}
+
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  z-index: 100;
+  background: #fff;
+  padding: 0.5rem 1rem;
+  outline: 3px solid #005eb8;
+}
+
+// Shared page scaffolding
+.sl-page {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.sl-hint {
+  font-size: 0.875rem;
+  color: #555;
+}
+
+.sl-alert {
+  border-left: 4px solid #b00020;
+  background: #fdecec;
+  color: #8b0019;
+  padding: 0.625rem 0.875rem;
+  border-radius: 4px;
+  font-weight: 600;
+}

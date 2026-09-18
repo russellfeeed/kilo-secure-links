@@ -8,9 +8,13 @@
     "lint": "ng lint"
   },
   "dependencies": {
+    "@angular/animations": "^18.2.14",
+    "@angular/cdk": "^18.2.14",
     "@angular/common": "^18.0.0",
     "@angular/core": "^18.0.0",
+    "@angular/flex-layout": "^15.0.0-beta.42",
     "@angular/forms": "^18.0.0",
+    "@angular/material": "^18.2.14",
     "@angular/platform-browser": "^18.0.0",
     "@angular/router": "^18.0.0",
     "rxjs": "^7.8.0",
