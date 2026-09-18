@@ -43,7 +43,10 @@ const SMS_TEMPLATE = (link: string): string =>
       <input id="verificationValue" name="verificationValue" [(ngModel)]="verificationValue" placeholder="1990-01-31" required />
 
       <label for="expiryDate">Expiry date</label>
-      <input id="expiryDate" name="expiryDate" type="date" [(ngModel)]="expiryDate" required />
+      <input id="expiryDate" name="expiryDate" type="date" [(ngModel)]="expiryDate" required [min]="today" />
+      @if (expiryInPast) {
+        <p class="error" role="alert">Expiry date must be in the future.</p>
+      }
 
       <label for="originalFilename">Original filename</label>
       <input id="originalFilename" name="originalFilename" [(ngModel)]="originalFilename" placeholder="letter.pdf" required />
@@ -51,7 +54,7 @@ const SMS_TEMPLATE = (link: string): string =>
       <label for="documentReference">Document reference</label>
       <input id="documentReference" name="documentReference" [(ngModel)]="documentReference" placeholder="REF-123" required />
 
-      <button type="submit" [disabled]="state === 'submitting' || !pdfBase64">
+      <button type="submit" [disabled]="state === 'submitting' || !pdfBase64 || expiryInPast">
         {{ state === 'submitting' ? 'Uploading…' : 'Upload PDF' }}
       </button>
     </form>
@@ -93,6 +96,12 @@ export class UploadHarnessComponent {
   error = '';
   missing: string[] = [];
   result: UploadSuccess | null = null;
+
+  readonly today = new Date().toISOString().slice(0, 10);
+
+  get expiryInPast(): boolean {
+    return this.expiryDate.length > 0 && this.expiryDate <= this.today;
+  }
 
   get smsPreview(): string {
     return this.result ? SMS_TEMPLATE(this.result.accessUrl) : '';
