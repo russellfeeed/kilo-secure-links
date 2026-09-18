@@ -56,7 +56,7 @@ test('access tokens are unique and hash deterministically', () => {
   const a = newAccessToken();
   const b = newAccessToken();
   assert.notEqual(a, b);
-  assert.equal(a.length >= 43, true);
+  assert.equal(a.length, 22);
   assert.equal(hashAccessToken(a), hashAccessToken(a));
   assert.notEqual(hashAccessToken(a), hashAccessToken(b));
 });

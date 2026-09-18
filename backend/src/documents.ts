@@ -24,7 +24,10 @@ export function newDocumentId(): string {
 }
 
 export function newAccessToken(): string {
-  return randomBytes(32).toString('base64url');
+  // 16 random bytes (128-bit entropy) -> 22 base64url chars. Keeps the SMS
+  // URL short while remaining unguessable; server-side rate limiting and
+  // the 15-minute lockout provide the remaining defence in depth.
+  return randomBytes(16).toString('base64url');
 }
 
 export function hashAccessToken(token: string): string {
