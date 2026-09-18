@@ -9,7 +9,9 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSelectModule } from '@angular/material/select';
 import { MatStepperModule } from '@angular/material/stepper';
+import { TEMPLATE_IDS } from './templates';
 
 interface UploadResult {
   documentId: string;
@@ -80,6 +82,7 @@ const SAMPLE_PDF_BASE64 =
     MatStepperModule,
     MatListModule,
     MatProgressBarModule,
+    MatSelectModule,
   ],
   template: `
     <div class="sl-page" fxLayout="row" fxLayoutAlign="center start">
@@ -143,6 +146,15 @@ const SAMPLE_PDF_BASE64 =
               <mat-form-field appearance="outline" fxFlex="100" fxFlex.gt-xs="calc(50% - 0.5rem)">
                 <mat-label>Filename</mat-label>
                 <input matInput name="pName" [(ngModel)]="filename" required />
+              </mat-form-field>
+              <mat-form-field appearance="outline" fxFlex="100" fxFlex.gt-xs="calc(50% - 0.5rem)">
+                <mat-label>Branding template</mat-label>
+                <mat-select name="pTemplate" [(ngModel)]="template">
+                  @for (id of templateIds; track id) {
+                    <mat-option [value]="id">{{ id }}</mat-option>
+                  }
+                </mat-select>
+                <mat-hint>Styles the patient page (REQ-024).</mat-hint>
               </mat-form-field>
               <div fxFlex="100">
                 <button mat-flat-button color="primary" type="submit" [disabled]="busy1()">
@@ -412,6 +424,9 @@ export class DevPlaygroundComponent {
   expiryDate = '';
   reference = '';
   filename = 'playground-sample.pdf';
+  template = 'default';
+
+  readonly templateIds = TEMPLATE_IDS;
 
   verifyDob = '';
   uploadResult = signal<UploadResult | null>(null);
@@ -472,6 +487,7 @@ export class DevPlaygroundComponent {
           expiryDate: this.expiryDate.trim(),
           originalFilename: this.filename.trim() || 'playground.pdf',
           documentReference: this.reference.trim(),
+          template: this.template,
           pdfBase64: SAMPLE_PDF_BASE64,
         }),
       });

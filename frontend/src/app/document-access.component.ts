@@ -8,6 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { type BrandingTheme, resolveBranding } from './templates';
 
 interface VerifySuccess {
   documentReference: string;
@@ -29,7 +30,15 @@ interface VerifySuccess {
     MatProgressBarModule,
   ],
   template: `
-    <div class="sl-page" fxLayout="row" fxLayoutAlign="center start">
+    <div
+      class="sl-page brand-wrap"
+      fxLayout="row"
+      fxLayoutAlign="center start"
+      [style.--sl-brand-primary]="theme.primary"
+      [style.--sl-brand-accent]="theme.accent"
+      [style.--sl-brand-on-primary]="theme.onPrimary"
+      [attr.data-template]="theme.id"
+    >
       <mat-card fxFlex="100" fxFlex.gt-sm="70" fxFlex.gt-lg="55">
         <mat-card-header>
           <div mat-card-avatar class="avatar" aria-hidden="true">
@@ -37,6 +46,7 @@ interface VerifySuccess {
           </div>
           <mat-card-title>Access your document</mat-card-title>
           <mat-card-subtitle>
+            <span class="brand-chip">{{ theme.label }}</span>
             Enter your date of birth to verify your identity and view it.
           </mat-card-subtitle>
         </mat-card-header>
@@ -123,13 +133,33 @@ interface VerifySuccess {
   `,
   styles: [
     `
+      /* REQ-024: theme Material controls from the --sl-brand-* vars set on the wrapper. */
+      .brand-wrap {
+        --mdc-filled-button-container-color: var(--sl-brand-primary);
+        --mdc-filled-button-label-text-color: var(--sl-brand-on-primary);
+        --mdc-outlined-button-label-text-color: var(--sl-brand-primary);
+        --mdc-outlined-button-outline-color: var(--sl-brand-primary);
+        --mdc-text-button-label-text-color: var(--sl-brand-primary);
+        --mdc-linear-progress-active-indicator-color: var(--sl-brand-primary);
+      }
       .avatar {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #eaf1fa;
+        background: color-mix(in srgb, var(--sl-brand-primary) 12%, #ffffff);
         border-radius: 50%;
-        color: #005eb8;
+        color: var(--sl-brand-primary);
+      }
+      .brand-chip {
+        display: inline-block;
+        background: var(--sl-brand-primary);
+        color: var(--sl-brand-on-primary);
+        border-radius: 999px;
+        padding: 0.05rem 0.6rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        margin-right: 0.4rem;
+        vertical-align: middle;
       }
       .state-box {
         display: flex;
@@ -167,6 +197,7 @@ export class DocumentAccessComponent implements OnInit {
   error = '';
   lockedUntil = '';
   result: VerifySuccess | null = null;
+  theme: BrandingTheme = resolveBranding('default');
 
   ngOnInit(): void {
     this.token = this.route.snapshot.paramMap.get('token')?.trim() ?? '';
@@ -176,6 +207,24 @@ export class DocumentAccessComponent implements OnInit {
       return;
     }
     this.state = 'form';
+    void this.loadBranding();
+  }
+
+  /**
+   * REQ-024: fetch the document's branding template so the page is themed
+   * before verification. Fails open to the default look on any error.
+   */
+  private async loadBranding(): Promise<void> {
+    try {
+      const res = await fetch(`/document-template?token=${encodeURIComponent(this.token)}`, {
+        headers: { accept: 'application/json' },
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { template?: string; label?: string };
+      this.theme = resolveBranding(data.template);
+    } catch {
+      // Keep default branding when the lookup is unreachable.
+    }
   }
 
   async onSubmit(): Promise<void> {

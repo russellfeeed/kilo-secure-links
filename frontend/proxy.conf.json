@@ -5,6 +5,12 @@
     "changeOrigin": true,
     "logLevel": "warn"
   },
+  "/document-template": {
+    "target": "https://oo4ulqov91.execute-api.eu-west-2.amazonaws.com",
+    "secure": true,
+    "changeOrigin": true,
+    "logLevel": "warn"
+  },
   "/documents": {
     "target": "https://oo4ulqov91.execute-api.eu-west-2.amazonaws.com",
     "secure": true,

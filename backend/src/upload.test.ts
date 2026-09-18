@@ -9,6 +9,7 @@ import {
   newAccessToken,
   verifyVerificationValue,
 } from './documents.js';
+import { isRegisteredTemplate, listTemplateIds } from './templates.js';
 
 const FULL_BODY = {
   customerId: 'cust-1',
@@ -68,4 +69,18 @@ test('buildAccessUrl joins base and token with exactly one slash', () => {
 
 test('documentS3Key is namespaced per document', () => {
   assert.equal(documentS3Key('doc-1'), 'documents/doc-1.pdf');
+});
+
+test('REQ-024: template field is optional and never in the required list', () => {
+  const res = validateUploadBody({ ...FULL_BODY });
+  assert.deepEqual(res, { ok: true });
+});
+
+test('REQ-024: seeded template ids all pass registration', () => {
+  // The upload handler rejects unregistered ids with 400 before anything else;
+  // this asserts the registry the handler checks against contains the seeds.
+  for (const id of ['default', 'restore-plc', 'york', 'nhs-radiology']) {
+    assert.equal(isRegisteredTemplate(id), true);
+    assert.ok(listTemplateIds().includes(id));
+  }
 });

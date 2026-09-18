@@ -29,7 +29,7 @@ All pages are served by CloudFront from the private `securelinks-dev-web` S3 buc
 The patient-facing page. This is where the secure link from the upstream SMS lands.
 
 - **Purpose:** prove the visitor is the intended recipient, then hand them the PDF. No login, no account, no cookies — knowledge-based verification only.
-- **Flow:** token arrives in the URL path → native date input collects the date of birth → `POST /verify` with `{token, dateOfBirth}` → on 200 the page shows the document reference and a 5-minute presigned download link that opens the PDF in a new tab.
+- **Flow:** token arrives in the URL path → the page fetches the document's branding template via `GET /document-template` (REQ-024: theme colours + department label render before verification, failing open to default styling on any error) → native date input collects the date of birth → `POST /verify` with `{token, dateOfBirth}` → on 200 the page shows the document reference and a 5-minute presigned download link that opens the PDF in a new tab.
 - **States shown:** checking link / form / verifying / verified (download link) / error message / locked (with `lockedUntil` time). All error and success regions are ARIA live.
 - **Failure behaviour:** wrong DOB → inline error, attempts counted server-side; 5th wrong attempt → 15-minute lockout, and correct DOB during lockout still fails.
 - **Audit:** every outcome is recorded (`success`, `failure`, `lockout`, `expired`, `access_attempt`).
@@ -97,6 +97,7 @@ The corner's integration point. Accepts one document per call:
 
 - Validates the seven mandatory fields (400 + `missing` list), Base64-decodes, enforces `%PDF-` magic bytes and a 10 MB cap, requires a future expiry.
 - `additionalFactors` (REQ-018, optional): extra verification factors from the registered set (`postcode`, `accountNumber`, `otp`); unknown types → 400. Every factor's value is hashed (per-factor salt) and stored in the row's ordered `verificationFactors` list — plaintext is never persisted.
+- `template` (REQ-024, optional): branding template id applied on the patient page; must be a registered id or the upload is rejected with 400 (absent/blank → `default`). Echoed in the 201 response.
 - Stores the PDF in S3 (`documents/<uuid>.pdf`, SSE-KMS) and the document row: factor hashes, SHA-256 access-token hash, decoded `sizeBytes` (REQ-015), TTL from expiry, `viewedStatus: false`, plus an `upload` audit event.
 - 201 → `{documentId, accessUrl, expiryDate}`. `accessUrl` is `https://<cloudfront>/d/<token>` — the short link the corner embeds in its SMS. The access token is never stored; only its hash.
 
@@ -108,9 +109,7 @@ Identical behaviour to `POST /documents`, no auth. Exists so the local harness c
 
 ```json
 { "token": "…", "dateOfBirth": "1990-01-31" }
-```
-
-- Resolves the token via the `byAccessToken` GSI (+ full-row read), rejects expired links (410), checks the lockout counter first (429 + `lockedUntil`).
+```- Resolves the token via the `byAccessToken` GSI (+ full-row read), rejects expired links (410), checks the lockout counter first (429 + `lockedUntil`).
 - **Multi-factor verification (REQ-018):** the document's stored factor list must all match — DOB from `dateOfBirth`, other factors from `factorValues: {"postcode": "…"}`. Any wrong or missing candidate → 401, counter +1, `failure` audit; 5th failure → 15-minute lockout, `lockout` audit; attempts while locked → `access_attempt` audit + 429. All comparisons are timing-safe per-factor hashes.
 - Success → resets the counter, sets `viewedStatus: true` once, writes `success` audit, emits the `DocumentVerified` usage metric, returns 200 `{documentId, documentReference, downloadUrl, expiresInSeconds}` where `downloadUrl` is a 5-minute S3 presigned GET (inline PDF disposition, original filename).
 
@@ -153,6 +152,21 @@ Each value is hashed with a per-factor salt (`securelinks:v1:<type>:` prefix) an
 3. Build + deploy (`npm run build:backend`, then `terraform apply` picks up the new Lambda `source_code_hash`).
 
 No changes are needed in `upload.ts`, `verify.ts`, the DB schema, or any frontend page: the upload accepts the new type in `additionalFactors`, verify resolves candidates from `factorValues[type]`, and hashing/lockout/audit all follow the generic factor path.
+
+### `GET /document-template?token=…` — pre-verify branding lookup (public, REQ-024)
+
+Lets the patient page render department branding **before** verification. The capability token is the credential: a hash lookup via the `byAccessToken` GSI resolves the document's stored template. Returns `200 {template, label}` (e.g. `{"template":"york","label":"York & Provide Community"}`) or `404` for an unknown token. The response carries **no PHI** — only the template id and display label. Legacy documents without a `template` attribute return `default`. Note: CloudFront maps 404s to the SPA (`index.html`) by design, so the browser sees a 200 HTML body for unknown tokens; the page fails open to default styling (`res.json()` throws → caught → default theme).
+
+### Branding templates (REQ-024)
+
+Per-document look-and-feel, chosen by the uploader:
+
+- **Upload field:** optional `template` string on `POST /documents` / `POST /dev/upload`. Blank/absent → `default`; an unrecognised name → **400 Bad Request** listing valid ids (stakeholder decision QST-041/042 — no silent fallback). The chosen id is stored on the document row and echoed in the 201 response.
+- **Seeded registry** (`backend/src/templates.ts`): `default` (SecureLinks), `restore-plc`, `york`, `nhs-radiology` — the tags named in the requirement. `resolveTemplate` maps blank/unknown ids to `default` on read paths.
+- **Frontend map** (`frontend/src/app/templates.ts`): each id carries a Material colour override (primary/accent via `--sl-brand-*` CSS custom properties) and a display label shown as a badge on `/d/:token`. The `/document-template` behaviour must be routed to the API before any SPA catch-all.
+- **Adding a new template:** one `registerTemplate({ id, label })` in the backend registry + one matching entry in the frontend map (colours/label), then build + deploy. No schema or handler changes.
+
+Phase 1 scope: colours + text label only — logos and per-template copy are deferred (no asset storage yet). There is deliberately no customer↔template permission mapping; any upload caller may use any registered tag.
 
 ### `GET /support/health?documentId=…&customerId=…` — support read model (IAM, REQ-007)
 
@@ -228,7 +242,7 @@ npm --workspace backend run test
 ### Frontend: local dev server
 
 ```powershell
-npm run dev:frontend   # port 4200; proxy.conf.json forwards /verify, /documents, /dev/upload, /dev/support-health, /dev/reports to the live API
+npm run dev:frontend   # port 4200; proxy.conf.json forwards /verify, /document-template, /documents, /dev/upload, /dev/support-health, /dev/reports to the live API
 ```
 
 Harness: `http://localhost:4200/dev/harness`. Playground: `http://localhost:4200/dev/playground`. DOB demo: `http://localhost:4200/d/<token>`.

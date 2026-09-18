@@ -31,6 +31,7 @@ Retention: document rows carry a TTL equal to the corner-supplied `expiryDate`; 
 | `GET /reports/document-events`, `GET /reports/usage` | AWS_IAM | same |
 | `GET /support/health`, `POST /support/reset-lockout` | AWS_IAM | support group policies grant only these routes + table reads |
 | `POST /verify` | Public (token + verification factors) | capability model, see §3 |
+| `GET /document-template` | Public (token) | REQ-024 pre-verify branding lookup; same token-hash capability check, returns only `{template, label}` — no PHI |
 | `GET /health` | Public | no data access |
 | `POST /dev/upload` | **None — dev only** | route exists only while `enable_dev_routes = true` (dev tfvars); abuse limited to creating dev documents |
 
@@ -48,6 +49,7 @@ Least privilege:
 - **Pluggable verification factors (REQ-018):** every document stores an ordered `verificationFactors` list (per-factor salted SHA-256 hashes — `securelinks:v1:<type>:` prefixes); DOB is always present as the primary factor, additional factors (`postcode`, `accountNumber`, `otp`) may be supplied at upload. Verification requires **all** stored factors to match, with candidates resolved from the request (`dateOfBirth` + `factorValues`). Values are never persisted in plaintext; the registry (`backend/src/factors.ts`) makes new factors a one-call addition with no handler redesign. Request/response shapes and a step-by-step guide for adding a new factor type are in README → "Verification factors beyond DOB (REQ-018)".
 - **Rate limiting & lockout:** 5 failed factor checks → 15-minute lockout held in `verification_counters`; correct factors during lockout are still rejected; attempts-while-locked are audited (`access_attempt`) (`backend/src/verify.ts`).
 - **Presigned download:** issued only after successful factor verification, 5-minute TTL, `inline` content disposition with sanitised filename, KMS-decrypted via the Lambda role — no public S3 access path exists.
+- **Branding templates (REQ-024):** the optional `template` upload field is validated against a fixed registry (`backend/src/templates.ts`) — unknown names are rejected with 400, so no free-form data reaches the row. The public `GET /document-template` lookup reuses the token-hash capability check and discloses only the template id and display label; CloudFront's global 404→SPA mapping means unknown tokens serve the app shell, which fails open to default styling. Templates change only colours/label — no scripts, no external assets.
 - **WAF:** AWS managed rule groups (CommonRuleSet) attached to the CloudFront distribution (`CLOUDFRONT` scope, us-east-1) in front of all routes.
 
 ## 4. Audit trail & integrity

@@ -14,6 +14,7 @@ import {
 import { buildFactorList, hashFactor, isRegisteredFactor } from './factors.js';
 import { emitCountMetric } from './metrics.js';
 import { json, nowIso, supportActor } from './http.js';
+import { isRegisteredTemplate, listTemplateIds, resolveTemplate } from './templates.js';
 import type { DocumentItem, StoredFactor } from './model.js';
 
 
@@ -38,6 +39,8 @@ interface UploadBody {
   pdfBase64?: string;
   /** REQ-018: optional extra verification factors (e.g. postcode, accountNumber). */
   additionalFactors?: Array<{ type?: string; value?: string }>;
+  /** REQ-024: optional branding template id applied on the patient page. */
+  template?: string;
 }
 
 const REQUIRED_FIELDS: Array<keyof UploadBody> = [
@@ -96,6 +99,16 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   const expiryDate = String(body.expiryDate).trim();
   const originalFilename = String(body.originalFilename).trim();
   const documentReference = String(body.documentReference).trim();
+
+  // REQ-024: optional branding template. Blank/absent -> default; unknown
+  // ids are rejected outright per the stakeholder decision (400, no fallback).
+  const templateInput = typeof body.template === 'string' ? body.template.trim() : '';
+  if (templateInput.length > 0 && !isRegisteredTemplate(templateInput)) {
+    return json(400, {
+      message: `Field template must be one of: ${listTemplateIds().join(', ')}.`,
+    });
+  }
+  const template = resolveTemplate(templateInput).id;
 
   const ttl = expiryToTtl(expiryDate);
   if (ttl === null) {
@@ -167,6 +180,7 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     ttl,
     sizeBytes: pdf.length,
     verificationFactors,
+    template,
   };
 
   await db().send(
@@ -199,5 +213,6 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
     documentId,
     accessUrl: buildAccessUrl(ACCESS_URL_BASE || 'https://example.invalid', accessToken),
     expiryDate,
+    template,
   });
 }

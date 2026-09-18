@@ -7,6 +7,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSelectModule } from '@angular/material/select';
+import { TEMPLATE_IDS } from './templates';
 
 interface UploadSuccess {
   documentId: string;
@@ -29,6 +31,7 @@ const SMS_TEMPLATE = (link: string): string =>
     MatButtonModule,
     MatIconModule,
     MatProgressBarModule,
+    MatSelectModule,
   ],
   template: `
     <div class="sl-page" fxLayout="row" fxLayoutAlign="center start">
@@ -127,6 +130,15 @@ const SMS_TEMPLATE = (link: string): string =>
                   required
                 />
               </mat-form-field>
+              <mat-form-field appearance="outline" fxFlex="100" fxFlex.gt-xs="calc(50% - 0.5rem)">
+                <mat-label>Branding template</mat-label>
+                <mat-select name="template" [(ngModel)]="template">
+                  @for (id of templateIds; track id) {
+                    <mat-option [value]="id">{{ id }}</mat-option>
+                  }
+                </mat-select>
+                <mat-hint>REQ-024: styles the patient page; unknown ids are rejected by the API.</mat-hint>
+              </mat-form-field>
               <div fxFlex="100">
                 <button
                   mat-flat-button
@@ -216,7 +228,10 @@ export class UploadHarnessComponent {
   expiryDate = '';
   originalFilename = '';
   documentReference = '';
+  template = 'default';
   pdfBase64 = '';
+
+  readonly templateIds = TEMPLATE_IDS;
 
   state: 'form' | 'submitting' | 'success' = 'form';
   error = '';
@@ -279,6 +294,7 @@ export class UploadHarnessComponent {
           expiryDate: this.expiryDate,
           originalFilename: this.originalFilename,
           documentReference: this.documentReference,
+          template: this.template,
           pdfBase64: this.pdfBase64,
         }),
       });

@@ -44,6 +44,13 @@ resource "aws_lambda_permission" "api_verify" {
   source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
 }
 
+resource "aws_lambda_permission" "api_document_template" {
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.document_template.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.main.execution_arn}/*/*"
+}
+
 resource "aws_lambda_permission" "api_report" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.report.function_name
@@ -93,6 +100,13 @@ resource "aws_apigatewayv2_integration" "verify" {
   payload_format_version = "2.0"
 }
 
+resource "aws_apigatewayv2_integration" "document_template" {
+  api_id                 = aws_apigatewayv2_api.main.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.document_template.invoke_arn
+  payload_format_version = "2.0"
+}
+
 resource "aws_apigatewayv2_integration" "report" {
   api_id                 = aws_apigatewayv2_api.main.id
   integration_type       = "AWS_PROXY"
@@ -138,6 +152,14 @@ resource "aws_apigatewayv2_route" "verify" {
   api_id    = aws_apigatewayv2_api.main.id
   route_key = "POST /verify"
   target    = "integrations/${aws_apigatewayv2_integration.verify.id}"
+}
+
+# REQ-024: public branding lookup for the patient page. The capability token
+# is the credential; the Lambda returns only the template id and label (no PHI).
+resource "aws_apigatewayv2_route" "document_template" {
+  api_id    = aws_apigatewayv2_api.main.id
+  route_key = "GET /document-template"
+  target    = "integrations/${aws_apigatewayv2_integration.document_template.id}"
 }
 
 resource "aws_apigatewayv2_route" "report" {

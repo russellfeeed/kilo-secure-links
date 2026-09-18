@@ -17,6 +17,8 @@ export interface DocumentItem {
   sizeBytes?: number;
   /** REQ-018: ordered verification factors on this document (dob always first). */
   verificationFactors?: StoredFactor[];
+  /** REQ-024: branding template id applied on the patient page. */
+  template?: string;
 }
 
 export type AuditEventType =

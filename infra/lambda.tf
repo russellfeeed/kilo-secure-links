@@ -181,6 +181,21 @@ resource "aws_lambda_function" "verify" {
   }
 }
 
+resource "aws_lambda_function" "document_template" {
+  function_name    = "${var.project}-${var.environment}-document-template"
+  role             = aws_iam_role.lambda_exec.arn
+  runtime          = "nodejs20.x"
+  handler          = "document-meta.handler"
+  filename         = data.archive_file.backend.output_path
+  source_code_hash = data.archive_file.backend.output_base64sha256
+  timeout          = 5
+  environment {
+    variables = {
+      DOCUMENTS_TABLE = aws_dynamodb_table.documents.name
+    }
+  }
+}
+
 resource "aws_lambda_function" "report" {
   function_name    = "${var.project}-${var.environment}-report"
   role             = aws_iam_role.lambda_exec.arn
